@@ -1,25 +1,48 @@
-const Clarifai = require("clarifai");
+const { ClarifaiStub, grpc } = require("clarifai-nodejs-grpc");
 
-const app = new Clarifai.App({
-  apiKey: "2867f090fa7946159c8ab650ca5ff341",
-});
+const PAT = '2867f090fa7946159c8ab650ca5ff341';
+const USER_ID = 'clarifai';
+const APP_ID = 'main';
+const MODEL_ID = 'face-detection';
+const MODEL_VERSION_ID = '6dc7e46bc9124c5c8824be4822abe105';
+
+const stub = ClarifaiStub.grpc();
 
 const handleApiCall = (req, res) => {
-  app.models
-    // HEADS UP! Sometimes the Clarifai Models can be down or not working as they are constantly getting updated.
-    // A good way to check if the model you are using is up, is to check them on the clarifai website. For example,
-    // for the Face Detect Mode: https://www.clarifai.com/models/face-detection
-    // If that isn't working, then that means you will have to wait until their servers are back up. Another solution
-    // is to use a different version of their model that works like the ones found here: https://github.com/Clarifai/clarifai-javascript/blob/master/src/index.js
-    // so you would change from:
-    // .predict(Clarifai.FACE_DETECT_MODEL, req.body.input)
-    // to:
-    // .predict('53e1df302c079b3db8a0a36033ed2d15', req.body.input)
-    .predict(Clarifai.FACE_DETECT_MODEL, req.body.input)
-    .then(data => {
-      res.json(data);
+  const raw = JSON.stringify({
+    "user_app_id": {
+      "user_id": USER_ID,
+      "app_id": APP_ID
+    },
+    "inputs": [
+      {
+        "data": {
+          "image": {
+            "url": req.body.input
+          }
+        }
+      }
+    ]
+  });
+
+  const requestOptions = {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json',
+      'Authorization': 'Key ' + PAT
+    },
+    body: raw
+  };
+
+  fetch("https://api.clarifai.com/v2/models/" + MODEL_ID + "/versions/" + MODEL_VERSION_ID + "/outputs", requestOptions)
+    .then(response => response.json())
+    .then(result => {
+      if (result.status.code !== 10000) {
+        return res.status(400).json('Model prediction failed: ' + result.status.description);
+      }
+      res.json(result);
     })
-    .catch(err => res.status(400).json('unable to work with API'))
+    .catch(err => res.status(400).json('Error processing image'));
 }
 
 const handleImage = (req, res, db) => {
